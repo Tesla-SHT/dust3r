@@ -6,8 +6,9 @@
 # training executable for DUSt3R
 # --------------------------------------------------------
 from dust3r.training import get_args_parser, train
-
+import torch
 if __name__ == '__main__':
+    torch.cuda.empty_cache()
     args = get_args_parser()
     args = args.parse_args()
     train(args)
