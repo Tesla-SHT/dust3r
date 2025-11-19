@@ -238,10 +238,10 @@ if __name__ == '__main__':
                         help='场景名称')
     parser.add_argument('--save_screenshot', action='store_true',
                         help='是否保存场景截图')
-    parser.add_argument('--output_dir', type=str, default='output',
+    parser.add_argument('--output_dir', type=str, default='output/finetune',
                         help='输出文件夹路径')
     parser.add_argument('--model_path', type=str, 
-                        default='checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth',
+                        default='checkpoints/dust3r_fintune_512dpt/checkpoint-best.pth',
                         help='模型路径')
     
     args = parser.parse_args()
@@ -289,7 +289,7 @@ if __name__ == '__main__':
 
             # 可视化（如果需要保存截图）
             if args.save_screenshot:
-                scene.show()
+                scene.show(show_cams=True)
                 #save_scene_screenshot(scene, args.scene_name, idx1, idx2, args.output_dir)
             
             print(f"✓ 处理完成")

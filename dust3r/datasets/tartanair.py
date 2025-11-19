@@ -20,66 +20,72 @@ class TartanAir(BaseStereoViewDataset):
         self.mask_bg = mask_bg
         self.dataset_label = 'TartanAir'
 
-        # -------- 1. 读取 selected_seqs_xxx.json（保持你现有的数据格式） --------
-        # 假设 json 结构和你原来代码一致：self.scenes[(obj, instance)] -> list of frame indices
+        # -------- 1. 读取 selected_seqs_xxx.json --------
+        # 新格式：{"hospital_easy_P019": {"1": [1, 2, 3, 4, 5]}, "hospital_easy_P028": {"1": [...]}, ...}
         with open(osp.join(self.ROOT, f'selected_seqs_{self.split}.json'), 'r') as f:
-            # 例如：{"scene_name": [frame_idx0, frame_idx1, ...], ...}
-            # 或更复杂的嵌套结构，这里直接沿用你原来的解析方式
-            self.scenes = json.load(f)
-
-        # self.scene_list: 列表化，和 Co3d 一样，通过整型 idx 映射到 (obj, instance)
-        # 如果你的 json key 就是 "scene_name" 一层，可以直接用 keys
+            data = json.load(f)
+        
+        # 展开成 (scene_name, seq_id, frame_list)
+        self.scenes = {}  # key: (scene_name, seq_id), value: list of frame indices
+        for scene_name, seq_dict in data.items():
+            for seq_id, frame_list in seq_dict.items():
+                self.scenes[(scene_name, seq_id)] = frame_list
+        
+        # self.scene_list: 所有 (scene_name, seq_id) 元组
         self.scene_list = list(self.scenes.keys())
 
         # -------- 2. 构造 pairs / combinations（逻辑模仿 Co3d，但长度用真实长度） --------
         # Co3d: for each scene: 100 frames, pairs with gap in [5,10,...,30]
         # 这里：对每个 scene，找到它实际的 index 列表 / 长度，然后按同样 gap 逻辑构造 (i,j)
-        self.combinations_per_scene = {}  # scene_name -> [(i, j), ...]
+        self.combinations_per_scene = {}  # (scene_name, seq_id) -> [(i, j), ...]
         max_gap = 30
         step_gap = 5
-        for scene in self.scene_list:
-            # 这里假设 self.scenes[scene] 是一个有序的 frame index 列表
-            frame_ids = self.scenes[scene]  # e.g. [0,1,2,...] 或者 [10,11,...]
+        for scene_key in self.scene_list:
+            # scene_key = (scene_name, seq_id)
+            frame_ids = self.scenes[scene_key]  # e.g. [1, 2, 3, 4, 5]
             n = len(frame_ids)
             if n < 2:
-                self.combinations_per_scene[scene] = []
+                self.combinations_per_scene[scene_key] = []
                 continue
 
             # 在 "帧下标" 空间里做组合（0..n-1），gap 按 Co3d 规则
-            # 之后在 _get_views 再把这些下标映射到真实 frame id
+            # 直接存储真实 frame_id
             combos = [
-                (i, j)
+                (frame_ids[i], frame_ids[j])
                 for i, j in itertools.combinations(range(n), 2)
                 if 0 < abs(i - j) <= max_gap and abs(i - j) % step_gap == 0
             ]
-            self.combinations_per_scene[scene] = combos
+            self.combinations_per_scene[scene_key] = combos
 
-        # 为了 __len__ 和 idx 映射方便，做一个全局的 (scene, i_local, j_local) 列表
+        # 为了 __len__ 和 idx 映射方便，做一个全局的 (scene_key, i_local, j_local) 列表
         self.global_pairs = []
-        for scene in self.scene_list:
-            for (i, j) in self.combinations_per_scene[scene]:
-                self.global_pairs.append((scene, i, j))
+        for scene_key in self.scene_list:
+            for (i, j) in self.combinations_per_scene[scene_key]:
+                self.global_pairs.append((scene_key, i, j))
 
         # 无效缓存，逻辑模仿 Co3d
-        self.invalidate = {scene: {} for scene in self.scene_list}
+        self.invalidate = {scene_key: {} for scene_key in self.scene_list}
 
     def __len__(self):
         return len(self.global_pairs)
 
     # -------------------- 路径构造：保持 TartanAir 自己的规则 -------------------- #
     def _get_metadatapath(self, scene, view_idx):
+        #print("scene name", scene)
         # 根据你原先 tartanair.py 的实现来：
         # 原码里是 _get_metadatapath(self, obj, instance, view_idx)
         # 如果你的 key = "obj/instance" 这样的字符串，可以在这里拆分
-        obj, instance = scene.split('/')
+        obj, instance =scene[0], scene[1]
         return osp.join(self.ROOT, obj, instance, 'images', f'frame{view_idx:06n}.npz')
 
     def _get_impath(self, scene, view_idx):
-        obj, instance = scene.split('/')
-        return osp.join(self.ROOT, obj, instance, 'images', f'frame{view_idx:06n}.jpg')
+        
+        obj, instance =scene[0], scene[1]
+        return osp.join(self.ROOT, obj, instance, 'images_rgb', f'frame{view_idx:06n}.png')
 
     def _get_depthpath(self, scene, view_idx):
-        obj, instance = scene.split('/')
+        
+        obj, instance =scene[0], scene[1]
         # 先尝试 TartanAir 的 png 深度
         path = osp.join(self.ROOT, obj, instance, 'depths', f'frame{view_idx:06n}.jpg.geometric.png')
         if os.path.exists(path):
@@ -91,43 +97,25 @@ class TartanAir(BaseStereoViewDataset):
         raise FileNotFoundError(f"Depth file not found for frame {view_idx} in {scene}")
 
     def _get_maskpath(self, scene, view_idx):
-        obj, instance = scene.split('/')
+
+        obj, instance = scene[0], scene[1]
         return osp.join(self.ROOT, obj, instance, 'masks', f'frame{view_idx:06n}.png')
 
     def _read_depthmap(self, depthpath, input_metadata):
-        # 和你原来的 tartanair 实现保持一致：
-        # 这里仅举例：png 是几何深度，直接读；exr 是浮点深度。
-        if depthpath.endswith('.png'):
-            depthmap = imread_cv2(depthpath, cv2.IMREAD_UNCHANGED)
-            # 视你的预处理而定：如果就是以 meter 保存，可以直接转 float32
-            depthmap = depthmap.astype(np.float32)
-        elif depthpath.endswith('.exr'):
-            depthmap = imread_cv2(depthpath, cv2.IMREAD_UNCHANGED)
-            depthmap = depthmap.astype(np.float32)
-        else:
-            raise ValueError(f'Unsupported depth format: {depthpath}')
-        # 可选：根据 metadata 里 max depth 做归一 / 截断，看你预处理规范
-        # depthmap = np.nan_to_num(depthmap, nan=0.0)
+        depthmap = imread_cv2(depthpath, cv2.IMREAD_UNCHANGED)
+        depthmap = (depthmap.astype(np.float32) / 65535) * np.nan_to_num(input_metadata['maximum_depth'])
         return depthmap
 
     # -------------------- _get_views：整体逻辑完全模仿 Co3d -------------------- #
     def _get_views(self, idx, resolution, rng):
         """
-        idx -> (scene, local_i, local_j)
-        再把 local idx 映射到实际 frame id，然后读取 image/depth/pose/intrinsics，
-        并走 _crop_resize_if_necessary，构造 views 列表。
+        idx -> (scene, frame_id_1, frame_id_2)
+        直接使用 frame_id 读取数据
         """
-        scene, i_local, j_local = self.global_pairs[idx]
-        frame_ids = self.scenes[scene]  # 实际帧号列表
-        last = len(frame_ids) - 1
+        scene, frame_id_1, frame_id_2 = self.global_pairs[idx]
 
-        # base indices（局部下标）
-        im1_idx_local, im2_idx_local = i_local, j_local
-
-        # 对应 Co3d 的 small random jitter：[-4, +4] 内随机偏移
-        imgs_local = [im2_idx_local, im1_idx_local]
-        imgs_local = [max(0, min(im_idx + rng.integers(-4, 5), last)) for im_idx in imgs_local]
-        imgs_idxs = deque(imgs_local)
+        # 不使用 jitter，直接使用 frame_id
+        imgs_idxs = deque([frame_id_2, frame_id_1])
 
         # decide now if we mask the bg（和 Co3d 一致）
         mask_bg = (self.mask_bg is True) or (self.mask_bg == 'rand' and rng.choice(2))
@@ -135,8 +123,7 @@ class TartanAir(BaseStereoViewDataset):
         views = []
 
         while len(imgs_idxs) > 0:
-            local_idx = imgs_idxs.popleft()
-            frame_id = frame_ids[local_idx]  # 真实 TartanAir 帧号
+            frame_id = imgs_idxs.popleft()
 
             # 如果之前这个 resolution 下这帧被判 invalid，就跳过
             if resolution in self.invalidate[scene] and frame_id in self.invalidate[scene][resolution]:
