@@ -15,6 +15,6 @@ torchrun --nproc_per_node=4 train.py \
     --train_criterion "ConfLoss(Regr3D(L21, norm_mode='avg_dis'), alpha=0.2)" \
     --test_criterion "Regr3D_ScaleShiftInv(L21, gt_scale=True)" \
     --pretrained "checkpoints/dust3r_fintune_512dpt_10epoch/checkpoint-last.pth" \
-    --lr 0.0001 --min_lr 1e-06 --warmup_epochs 1 --epochs 100 --batch_size 1 --accum_iter 8 \
-    --save_freq 1 --keep_freq 5 --eval_freq 1 --disable_cudnn_benchmark \
+    --lr 0.0001 --min_lr 1e-06 --warmup_epochs 1 --epochs 200 --batch_size 1 --accum_iter 16 \
+    --save_freq 5 --keep_freq 10 --eval_freq 5 --disable_cudnn_benchmark \  
     --output_dir "checkpoints/dust3r_fintune_512dpt_1119"
