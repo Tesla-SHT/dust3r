@@ -300,9 +300,9 @@ class BasePCOptimizer (nn.Module):
             colors = np.random.randint(0, 256, size=(self.n_imgs, 3))
             colors = list(map(tuple, colors.tolist()))
             for n in range(self.n_imgs):
-                viz.add_pointcloud(self.get_pts3d()[n], colors[n], self.get_masks()[n])
+                viz.add_pointcloud(self.get_pts3d()[n], colors[n],[(conf > 0) for conf in self.im_conf][n])
         else:
-            viz.add_pointcloud(self.get_pts3d(), self.imgs, self.get_masks())
+            viz.add_pointcloud(self.get_pts3d(), self.imgs,  [(conf > 0) for conf in self.im_conf])
             colors = np.random.randint(256, size=(self.n_imgs, 3))
 
         # camera poses

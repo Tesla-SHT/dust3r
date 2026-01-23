@@ -29,16 +29,18 @@ def get_image_pairs_sliding_window(folder_path, start_idx, end_idx, gap, step):
     ])
     
     if end_idx is None:
-        end_idx = len(all_images) - 1
+        end_idx = len(all_images)
     
     image_pairs = []
     current_idx = start_idx
-    
+    print("current idx", current_idx)
+    print("end idx", end_idx)
+    print("total images", len(all_images))
     while current_idx + gap <= end_idx and current_idx < len(all_images):
         idx1 = current_idx
         idx2 = current_idx + gap
         
-        if idx2 < len(all_images):
+        if idx2 <= len(all_images):
             image_pairs.append((all_images[idx1], all_images[idx2], idx1, idx2))
             print(f"添加图片对: [{idx1}] 和 [{idx2}]")
         
@@ -241,7 +243,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, default='output/finetune',
                         help='输出文件夹路径')
     parser.add_argument('--model_path', type=str, 
-                        default='checkpoints/dust3r_fintune_512dpt/checkpoint-best.pth',
+                        default='checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth',
                         help='模型路径')
     
     args = parser.parse_args()
@@ -326,5 +328,9 @@ python usage_batch.py --folder /run/determined/workdir/data/feed_forward_event/T
 
 
 python usage_batch.py --folder /run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor/hospital_easy_P028/1/images_rgb --start_idx 150 --end_idx 250 --gap 6 --step 10 --save_screenshot --scene_name hospital_easy_P028
-
+python usage_batch.py --folder /run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor/japanesealley_easy_P003/1/images_rgb --start_idx 485 --end_idx 495 --gap 9 --step 9 --save_screenshot --scene_name japanesealley_easy_P003
+python usage_batch.py --folder /run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor/japanesealley_easy_P005/1/images_rgb --start_idx 150 --end_idx 160 --gap 9 --step 9 --save_screenshot --scene_name japanesealley_easy_P005
+python usage_batch.py --folder /run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/MVSEC_all/outdoor_night_1/1/images_rgb --start_idx 825 --end_idx 832 --gap 6 --step 10 --save_screenshot --scene_name outdoor_night_1
+python usage_batch.py --folder /run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/MVSEC_all/outdoor_night_1/1/images_rgb --start_idx 1975 --end_idx 1980 --gap 4 --step 10 --save_screenshot --scene_name outdoor_night_1
+python usage_batch.py --folder output_blur/hospital_easy_P015/1/images_rgb --start_idx 0 --end_idx 1 --gap 1 --step 1 --save_screenshot --scene_name hospital_easy_P015_motion
 '''

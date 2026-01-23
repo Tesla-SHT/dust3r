@@ -403,6 +403,7 @@ if __name__ == '__main__':
     parser.add_argument("--output_dir", type=str, default="/home/w/Documents/project/data/dust3r_event_output/EvGGS", help="The output directory.")
     parser.add_argument("--frame_start", type=int, required=True, help="The starting frame index.")
     parser.add_argument("--frame_end", type=int, required=True, help="The ending frame index.")
+    parser.add_argument("--base_folder", type=str, default="/run/determined/workdir/data/feed_forward_event/Tartanair_tmp/indoor", help="The base folder for the dataset.")
     args = parser.parse_args()
 
     scene_name = args.scene_name
@@ -414,14 +415,16 @@ if __name__ == '__main__':
     if (type == "frame"):
         model_name = "checkpoints/dust3r_fintune_512dpt_1119/checkpoint-best.pth"
     elif (type == "frame_voxel"):
-        model_name = "checkpoints/dust3r_fintune_512dpt_1119/checkpoint-best.pth"
+        model_name = "checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth"
     
     # you can put the path to a local checkpoint in model_name if needed
     model = AsymmetricCroCo3DStereo.from_pretrained(model_name, input_type=type).to(device)
     #base_path =  f"/run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor"
     #base_path = f"/run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor"
-    base_path = f"/run/determined/workdir/data/feed_forward_event/Tartanair_tmp/indoor"
+    #base_path = f"/run/determined/workdir/data/feed_forward_event/MVSEC_all"
+    base_path = args.base_folder
     scene_path = f"{base_path}/{scene_name}/1/images_rgb"
+    #scene_path = f"{base_path}/{scene_name}"
     # Load the frame data
     if ("frame" in type):
         p1_path = os.path.join(scene_path, f"frame{frame_start}.png")
@@ -488,5 +491,10 @@ if __name__ == '__main__':
     visualize_results_separate(refined_depth1, refined_depth2, ground_truth1, ground_truth2, frame_start, frame_end, output_dir, scene_name)
 '''
 python -m depth.depth_CUT3R --scene_name hospital_easy_P019 --frame_start 359 --frame_end 369 --output output/depth_hospital
-python -m depth.depth_CUT3R --scene_name japanesealley_easy_P003 --frame_start 500 --frame_end 510 --output output/depth_japanesealley
+
+python -m depth.depth_CUT3R --scene_name outdoor_night_1 --frame_start 825 --frame_end 832 --output output/depth_outdoor_night
+python -m depth.depth_CUT3R --scene_name japanesealley_easy_P003 --frame_start 485 --frame_end 495 --output output/depth_japanesealley_base
+python -m depth.depth_CUT3R --scene_name japanesealley_easy_P005 --frame_start 150 --frame_end 160 --output output/depth_japanesealley_base
+python -m depth.depth_CUT3R --scene_name outdoor_night_1 --frame_start 1975 --frame_end 1980 --output output/depth_outdoor_night_1 --base_folder /run/determined/workdir/data/feed_forward_event/MVSEC_all
+python -m depth.depth_CUT3R --scene_name hospital_easy_P015 --frame_start 1 --frame_end 2 --output output/depth_hospital_P015 --base_folder output_blur
 '''

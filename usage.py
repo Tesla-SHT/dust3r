@@ -11,11 +11,14 @@ if __name__ == '__main__':
     lr = 0.01
     niter = 300
 
-    model_name = "checkpoints/dust3r_demo_224/checkpoint-best.pth"
+    model_name = "checkpoints/dust3r_demo_512dpt/checkpoint-best.pth"
     # you can put the path to a local checkpoint in model_name if needed
     model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to(device)
     # load_images can take a list of images or a directory
-    images = load_images(['croco/assets/Chateau1.png', 'croco/assets/Chateau2.png'], size=224)
+    #data_root = '/run/determined/workdir/ssd4/PEOD/rgb/test/challenge/sequence_001_test/'
+    data_root = '/run/user/1000/gvfs/sftp:host=10.0.1.67,port=22332,user=sht/UNSAFE_SSD4/PEOD/rgb/test/challenge/sequence_010_test/'
+
+    images = load_images([data_root + 'sequence_010_0001_test.png', data_root + 'sequence_010_0010_test.png'], size=512)
     pairs = make_pairs(images, scene_graph='complete', prefilter=None, symmetrize=True)
     output = inference(pairs, model, device, batch_size=batch_size)
 
@@ -48,7 +51,7 @@ if __name__ == '__main__':
     confidence_masks = scene.get_masks()
 
     # visualize reconstruction
-    scene.show()
+    scene.show(flip_view=True)
 
     # find 2D-2D matches between the two images
     # from dust3r.utils.geometry import find_reciprocal_matches, xy_grid

@@ -132,12 +132,15 @@ if __name__ == '__main__':
         plt.axis('off')
         plt.tight_layout()
         plt.show()
+    #save the image
+    result_img.save(output_path)
+    print(f"\n运动模糊图片已保存到: {output_path}")
 
 '''
 使用示例：
 
 # 创建运动模糊图片（平均混合10张图片）
-python create_motion_blur.py \
+python usage_motion.py \
     --folder /path/to/images \
     --start_idx 0 \
     --num_images 10 \
@@ -147,11 +150,13 @@ python create_motion_blur.py \
     --preview
 
 # 创建运动模糊图片（高斯加权混合20张图片，每2帧取1张）
-python create_motion_blur.py \
-    --folder /path/to/images \
-    --start_idx 0 \
-    --num_images 20 \
-    --step 2 \
+python usage_motion.py \
+    --folder /run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor/hospital_easy_P015/1/images_rgb \
+    --start_idx 170 \
+    --num_images 10 \
+    --step 1 \
     --blend_mode weighted \
-    --scene_name carwelding
+    --scene_name hospital_easy_P015 \
+    --output_dir output_blur \
+    --preview
 '''

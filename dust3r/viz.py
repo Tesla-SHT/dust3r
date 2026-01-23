@@ -205,9 +205,14 @@ class SceneViz:
             self.add_camera(pose_c2w, get(focals,i), image=get(images,i), color=get(colors,i), imsize=get(imsizes,i), **kw)
         return self
 
-    def show(self, point_size=2):
-        self.scene.show(line_settings= {'point_size': point_size})
-
+    def show(self, point_size=2, flip_view=True):
+        if flip_view:
+            # 翻转视角180度
+            rotation = np.eye(4)
+            rotation[:3, :3] = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+            self.scene.apply_transform(rotation)
+        
+        self.scene.show(line_settings={'point_size': point_size})
 
 def show_raw_pointcloud_with_cams(imgs, pts3d, mask, focals, cams2world,
                                   point_size=2, cam_size=0.05, cam_color=None):
