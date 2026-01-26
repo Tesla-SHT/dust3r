@@ -18,50 +18,110 @@ import matplotlib.pyplot as plt
 from tools import depth_evaluation  # 引入tools中的depth_evaluation方法
 from rich.console import Console
 console = Console()
-def save_depth_image(depth, out_path, cmap='jet_r'):
-    # Change the depth=0 to depth 1
+def save_depth_image(depth, out_path, cmap='jet_r', target_aspect_ratio=4/3):
+    """保存深度图，确保输出图像是 4:3 比例且无白边。"""
+    depth = np.asarray(depth)
+    depth = depth.copy()
     depth[depth == 0] = 1.0
-    import matplotlib.pyplot as plt
-    import numpy as np
 
-    # Remove white blank by ensuring the aspect ratio matches the depth image
-    plt.figure(figsize=(4, 3), dpi=150)  # Adjusted to 4:3 aspect ratio
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Remove padding
+    H, W = depth.shape
+    current_aspect_ratio = W / H
+
+    if abs(current_aspect_ratio - target_aspect_ratio) > 0.01:
+        if current_aspect_ratio > target_aspect_ratio:
+            target_H = int(W / target_aspect_ratio)
+            depth_resized = cv2.resize(depth, (W, target_H), interpolation=cv2.INTER_LINEAR)
+        else:
+            target_W = int(H * target_aspect_ratio)
+            depth_resized = cv2.resize(depth, (target_W, H), interpolation=cv2.INTER_LINEAR)
+    else:
+        depth_resized = depth
+
+    output_H, output_W = depth_resized.shape
+    dpi = 100
+    fig_width = output_W / dpi
+    fig_height = output_H / dpi
+    plt.figure(figsize=(fig_width, fig_height), dpi=dpi)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     plt.axis('off')
-
-    # Calculate the aspect ratio of the depth image
-    aspect_ratio = depth.shape[1] / depth.shape[0]
-    plt.imshow(depth, cmap=cmap, aspect=aspect_ratio)
-
-    plt.savefig(out_path, bbox_inches='tight', pad_inches=0)
+    plt.imshow(depth_resized, cmap=cmap, aspect='auto')
+    plt.savefig(out_path, dpi=dpi, bbox_inches='tight', pad_inches=0)
     plt.close()
 
-def visualize_results_separate(depth1, depth2, gt1, gt2, frame_start, frame_end, output_dir, scene_name):
-    # view 0 (frame_start)
+def visualize_results(depth1, depth2, ground_truth1, ground_truth2, frame_start, frame_end, output_dir, scene_name):
+    """生成四张图放在一起的对比图（4:3比例）。"""
+    fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+    fig.suptitle(f'{scene_name} - Frame {frame_start} vs {frame_end}', fontsize=12)
+
+    axes[0, 0].imshow(depth1, cmap='jet_r')
+    axes[0, 0].set_title('Pred Depth 1', fontsize=10)
+    axes[0, 0].axis('off')
+
+    axes[0, 1].imshow(ground_truth1, cmap='jet_r')
+    axes[0, 1].set_title('GT Depth 1', fontsize=10)
+    axes[0, 1].axis('off')
+
+    axes[1, 0].imshow(depth2, cmap='jet_r')
+    axes[1, 0].set_title('Pred Depth 2', fontsize=10)
+    axes[1, 0].axis('off')
+
+    axes[1, 1].imshow(ground_truth2, cmap='jet_r')
+    axes[1, 1].set_title('GT Depth 2', fontsize=10)
+    axes[1, 1].axis('off')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, f"comparison_{scene_name}_{frame_start}_{frame_end}_CUT3R.png"), dpi=150, bbox_inches='tight')
+    plt.close()
+
+
+def visualize_results_separate(
+    depth1,
+    depth2,
+    gt1=None,
+    gt2=None,
+    frame_start=None,
+    frame_end=None,
+    output_dir=None,
+    scene_name=None,
+    depth_only=False,
+):
+    """保存深度图，支持两种模式：
+    - depth_only=True: 只保存两张 pred depth 图
+    - depth_only=False: 保存四张图（pred1, gt1, pred2, gt2）以及对比图
+    """
     if isinstance(depth1, torch.Tensor):
         depth1 = depth1.cpu().detach().numpy()
     if isinstance(depth2, torch.Tensor):
         depth2 = depth2.cpu().detach().numpy()
+
+    if depth_only:
+        f0_pred = os.path.join(output_dir, f"{scene_name}_frame{frame_start}_view0_pred.png")
+        f1_pred = os.path.join(output_dir, f"{scene_name}_frame{frame_end}_view1_pred.png")
+        save_depth_image(depth1, f0_pred)
+        save_depth_image(depth2, f1_pred)
+        console.print(f"[green]保存深度图: {f0_pred}, {f1_pred}[/green]")
+        return
+
     if isinstance(gt1, torch.Tensor):
         gt1 = gt1.cpu().detach().numpy()
     if isinstance(gt2, torch.Tensor):
         gt2 = gt2.cpu().detach().numpy()
+
     f0_pred = os.path.join(output_dir, f"{scene_name}_frame{frame_start}_view0_pred.png")
-    f0_gt   = os.path.join(output_dir, f"{scene_name}_frame{frame_start}_view0_gt.png")
-    save_depth_image(depth1, f0_pred)
-    #print("depth1 range", depth1.min(), depth1.max(), depth1.mean())
-    #print("gt1 range", gt1.min(), gt1.max(), gt1.mean())
-    #if gt1>0.5 give it 0.5(limit)
-    #gt1 = np.clip(gt1, 0, depth1.max()*2)
-    save_depth_image(gt1, f0_gt)
-    # view 1 (frame_end)
+    f0_gt = os.path.join(output_dir, f"{scene_name}_frame{frame_start}_view0_gt.png")
     f1_pred = os.path.join(output_dir, f"{scene_name}_frame{frame_end}_view1_pred.png")
-    f1_gt   = os.path.join(output_dir, f"{scene_name}_frame{frame_end}_view1_gt.png")
+    f1_gt = os.path.join(output_dir, f"{scene_name}_frame{frame_end}_view1_gt.png")
+
+    save_depth_image(depth1, f0_pred)
+    save_depth_image(gt1, f0_gt)
     save_depth_image(depth2, f1_pred)
-    #gt2 = np.clip(gt2, 0,depth2.max()*2)
-    #print("gt2 mean", gt2.min(), gt2.max(), gt2.mean())
     save_depth_image(gt2, f1_gt)
+
+    comparison_path = os.path.join(output_dir, f"comparison_{scene_name}_{frame_start}_{frame_end}_CUT3R.png")
+    visualize_results(depth1, depth2, gt1, gt2, frame_start, frame_end, output_dir, scene_name)
+
     console.print(f"[green]保存视角图像: {f0_pred}, {f0_gt}, {f1_pred}, {f1_gt}[/green]")
+    console.print(f"[green]保存对比图: {comparison_path}[/green]")
 def process_and_evaluate_depth_pair(depth, ground_truths, mask, frame_start, output_dir, 
                                iterations=20000, lr=0.5):
     # 确保输入数据为numpy格式
@@ -228,6 +288,11 @@ def compute_depth(scene, mask, frame_start, output_dir, idx):
     depth[~valid_mask] = 0
     if np.min(depth) < 0:
         depth = -depth
+
+    if depth.shape != mask.shape:
+        console.print(f"[yellow]Warning: depth shape {depth.shape} != mask shape {mask.shape}, resizing mask to match depth[/yellow]")
+        mask = cv2.resize(mask, (depth.shape[1], depth.shape[0]), interpolation=cv2.INTER_NEAREST)
+
     depth[mask == 0] = 0
     np.savetxt(os.path.join(output_dir, f"original_depth_{frame_start}.txt"), depth, fmt='%f')
     return depth, mask
@@ -285,6 +350,111 @@ def visualize_results(depth1, depth2, ground_truth1, ground_truth2, frame_start,
     plt.title('Ground Truth 2')
     plt.savefig(os.path.join(output_dir, f"comparison_{scene_name}_{frame_start}_{frame_end}_CUT3R.png"))
     #plt.show()
+
+
+def run_pair(
+    model,
+    scene_name,
+    base_path,
+    frame_start_int,
+    frame_end_int,
+    output_dir,
+    input_type="frame",
+    size=512,
+    niter=300,
+    schedule='cosine',
+    lr=0.01,
+    depth_only=False,
+    image_subdir="images_rgb",
+):
+    """复用单对视角深度估计流程（批处理/调用用）。
+
+    - depth_only=True: 不读取GT、不算指标，只输出深度图
+    - depth_only=False: 读取GT并评估；若GT缺失则自动降级为 depth_only
+    """
+    device = next(model.parameters()).device
+    frame_start = str(frame_start_int).zfill(6)
+    frame_end = str(frame_end_int).zfill(6)
+
+    try:
+        scene_path = f"{base_path}/{scene_name}/1/{image_subdir}"
+        p1_path = os.path.join(scene_path, f"frame{frame_start}.png")
+        p2_path = os.path.join(scene_path, f"frame{frame_end}.png")
+        if not (os.path.exists(p1_path) and os.path.exists(p2_path)):
+            console.print(f"[red]Skip pair {scene_name} {frame_start}-{frame_end} (image missing)[/red]")
+            return None
+
+        img1 = cv2.imread(p1_path)
+        img2 = cv2.imread(p2_path)
+        original_size1 = (img1.shape[1], img1.shape[0])
+        original_size2 = (img2.shape[1], img2.shape[0])
+
+        images = load_images([p1_path, p2_path], square_ok=True, size=size)
+        pairs = make_pairs(images, scene_graph='complete', prefilter=None, symmetrize=True)
+        output = inference(pairs, model, device, batch_size=1, input_type=input_type)
+
+        try:
+            scene = global_aligner(output, device=device, mode=GlobalAlignerMode.PairViewer)
+            scene.compute_global_alignment(init="mst", niter=niter, schedule=schedule, lr=lr)
+        except torch._C._LinAlgError:
+            console.print(f"[red]❌ Singular matrix error for {scene_name} {frame_start}-{frame_end}[/red]")
+            console.print(f"[yellow]尝试使用备用初始化（无MST）...[/yellow]")
+            try:
+                scene = global_aligner(output, device=device, mode=GlobalAlignerMode.PairViewer)
+                scene.compute_global_alignment(init="none", niter=niter, schedule=schedule, lr=lr)
+                console.print(f"[green]✓ 备用方法成功[/green]")
+            except Exception as e2:
+                console.print(f"[red]❌ 备用方法也失败: {e2}，跳过此对[/red]")
+                return None
+
+        mask_path = f"{base_path}/{scene_name}/1/masks"
+        mask1 = load_and_preprocess_mask(os.path.join(mask_path, f"frame{frame_start}.png"), original_size1, target_size=size, square_ok=True)
+        mask2 = load_and_preprocess_mask(os.path.join(mask_path, f"frame{frame_end}.png"), original_size2, target_size=size, square_ok=True)
+
+        os.makedirs(output_dir, exist_ok=True)
+        depth1, _ = compute_depth(scene, mask1, frame_start, output_dir, 0)
+        depth2, _ = compute_depth(scene, mask2, frame_end, output_dir, 1)
+
+        if depth_only:
+            visualize_results_separate(depth1, depth2, None, None, frame_start, frame_end, output_dir, scene_name, depth_only=True)
+            return {"scene": scene_name, "frame_start": frame_start_int, "frame_end": frame_end_int}
+
+        depth_path = f"{base_path}/{scene_name}/1/depths"
+        gt1_path = os.path.join(depth_path, f"frame{frame_start}.jpg.geometric.png")
+        gt2_path = os.path.join(depth_path, f"frame{frame_end}.jpg.geometric.png")
+        if not (os.path.exists(gt1_path) and os.path.exists(gt2_path)):
+            console.print(f"[red]GT missing for {scene_name} {frame_start}-{frame_end}, switching to depth-only[/red]")
+            visualize_results_separate(depth1, depth2, None, None, frame_start, frame_end, output_dir, scene_name, depth_only=True)
+            return {"scene": scene_name, "frame_start": frame_start_int, "frame_end": frame_end_int}
+
+        gt1 = load_and_preprocess_mask(gt1_path, original_size1, target_size=size, square_ok=True).astype(np.float32) / 255.0
+        gt2 = load_and_preprocess_mask(gt2_path, original_size2, target_size=size, square_ok=True).astype(np.float32) / 255.0
+
+        refined_depth1, res1 = process_and_evaluate_depth_pair(depth1, gt1, mask1, frame_start, output_dir)
+        refined_depth2, res2 = process_and_evaluate_depth_pair(depth2, gt2, mask2, frame_end, output_dir)
+
+        visualize_results_separate(refined_depth1, refined_depth2, gt1, gt2, frame_start, frame_end, output_dir, scene_name, depth_only=False)
+
+        return {
+            "scene": scene_name,
+            "frame_start": frame_start_int,
+            "frame_end": frame_end_int,
+            "rmse1": res1["RMSE"],
+            "abs_rel1": res1["Abs Rel"],
+            "sq_rel1": res1["Sq Rel"],
+            "delta1_25_1": res1["δ < 1.25"],
+            "rmse2": res2["RMSE"],
+            "abs_rel2": res2["Abs Rel"],
+            "sq_rel2": res2["Sq Rel"],
+            "delta1_25_2": res2["δ < 1.25"],
+            "delta1_3_1": res1.get("δ < 1.03"),
+            "delta1_3_2": res2.get("δ < 1.03"),
+        }
+    except Exception as e:
+        console.print(f"[red]❌ Unexpected error for {scene_name} {frame_start_int}-{frame_end_int}: {type(e).__name__}: {e}[/red]")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        return None
 def load_and_preprocess_mask(mask_path, original_size, target_size, square_ok=False):
     """
     对mask应用与load_images相同的变换
@@ -396,14 +566,16 @@ if __name__ == '__main__':
     lr = 0.01
     niter = 300
 
-    # Define the type of the input and model among (frame, voxel, frame_voxel), no voxel ckpt now
-    type = "frame"
+    # Define the type of the input and model among (frame, frame_voxel)
+    input_type_default = "frame"
     parser = argparse.ArgumentParser(description="Depth estimation script.")
     parser.add_argument("--scene_name", type=str, required=True, help="The name of the scene.")
     parser.add_argument("--output_dir", type=str, default="/home/w/Documents/project/data/dust3r_event_output/EvGGS", help="The output directory.")
     parser.add_argument("--frame_start", type=int, required=True, help="The starting frame index.")
     parser.add_argument("--frame_end", type=int, required=True, help="The ending frame index.")
-    parser.add_argument("--base_folder", type=str, default="/run/determined/workdir/data/feed_forward_event/Tartanair_tmp/indoor", help="The base folder for the dataset.")
+    parser.add_argument("--base_folder", "--base_path", dest="base_path", type=str, default="/run/determined/workdir/data/feed_forward_event/Tartanair_tmp/indoor", help="The base folder/path for the dataset.")
+    parser.add_argument("--input_type", type=str, default=input_type_default, choices=["frame", "frame_voxel"], help="Model input type.")
+    parser.add_argument("--depth_only", action='store_true', help="Only generate depth maps without evaluation (no GT comparison).")
     args = parser.parse_args()
 
     scene_name = args.scene_name
@@ -412,40 +584,27 @@ if __name__ == '__main__':
     idx = args.frame_start
     frame_start = str(args.frame_start).zfill(6)
     frame_end = str(args.frame_end).zfill(6)
-    if (type == "frame"):
-        model_name = "checkpoints/dust3r_fintune_512dpt_1119/checkpoint-best.pth"
-    elif (type == "frame_voxel"):
-        model_name = "checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth"
+    model_name = "checkpoints/dust3r_demo_512dpt/checkpoint-best.pth"
     
     # you can put the path to a local checkpoint in model_name if needed
-    model = AsymmetricCroCo3DStereo.from_pretrained(model_name, input_type=type).to(device)
+    model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to(device)
     #base_path =  f"/run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor"
     #base_path = f"/run/user/1001/gvfs/sftp:host=login.cvgl.lab,port=22332/datasets/feed_forward_event/Tartanair_tmp/indoor"
     #base_path = f"/run/determined/workdir/data/feed_forward_event/MVSEC_all"
-    base_path = args.base_folder
+    base_path = args.base_path
     scene_path = f"{base_path}/{scene_name}/1/images_rgb"
     #scene_path = f"{base_path}/{scene_name}"
     # Load the frame data
-    if ("frame" in type):
-        p1_path = os.path.join(scene_path, f"frame{frame_start}.png")
-        p2_path = os.path.join(scene_path, f"frame{frame_end}.png")
-        img1 = cv2.imread(p1_path)
-        original_size1 = (img1.shape[1], img1.shape[0])  # (W, H)
-        
-        img2 = cv2.imread(p2_path)
-        original_size2 = (img2.shape[1], img2.shape[0])  # (W, H)
-        # load_images can take a list of images or a directory, remember to change the image size
-        images = load_images([p1_path, p2_path], square_ok=True, size=512)
+    p1_path = os.path.join(scene_path, f"frame{frame_start}.png")
+    p2_path = os.path.join(scene_path, f"frame{frame_end}.png")
+    img1 = cv2.imread(p1_path)
+    original_size1 = (img1.shape[1], img1.shape[0])  # (W, H)
+    
+    img2 = cv2.imread(p2_path)
+    original_size2 = (img2.shape[1], img2.shape[0])  # (W, H)
+    # load_images can take a list of images or a directory, remember to change the image size
+    images = load_images([p1_path, p2_path], square_ok=True, size=512)
 
-    # Load the voxel data
-    if ("voxel" in type):
-        p1_path = os.path.join(scene_path, f"frame{frame_start}.npz")
-        p2_path = os.path.join(scene_path, f"frame{frame_end}.npz")
-        # 对voxel应用相同的预处理
-        voxel1 = load_and_preprocess_voxel(p1_path, original_size1, target_size=512, square_ok=True)
-        voxel2 = load_and_preprocess_voxel(p2_path, original_size2, target_size=512, square_ok=True)
-        images[0]["voxel"] = voxel1[None, ...]  # 添加batch维度
-        images[1]["voxel"] = voxel2[None, ...]
 
     # print(images)
     pairs = make_pairs(images, scene_graph='complete', prefilter=None, symmetrize=True)
@@ -467,28 +626,33 @@ if __name__ == '__main__':
     # depth = depthmap[0].cpu().detach().numpy()
     # depth[mask1 == 0] = 0
 
-    console.rule("Starting the depth processing...")
-    depth_path = base_path+ f"/{scene_name}/1/depths"
-    #use png to load GT
-    gt_path = os.path.join(depth_path, f"frame{frame_start}.jpg.geometric.png")
-    #load gt image, do not use imageio
-    console.rule("[bold red] Left View")
-    ground_truth1 = load_ground_truth(gt_path)    
-    ground_truth1 = load_and_preprocess_mask(gt_path, original_size1, target_size=512, square_ok=True)
-    ground_truth1 = ground_truth1.astype(np.float32) / 255.0
     depth1, mask1 = compute_depth(scene, mask1, frame_start, output_dir, 0)
+    depth2, mask2 = compute_depth(scene, mask2, frame_end, output_dir, 1)
+
+    if args.depth_only:
+        console.print("[bold green]Depth-only mode: Generating depth maps without evaluation[/bold green]")
+        visualize_results_separate(depth1, depth2, None, None, frame_start, frame_end, output_dir, scene_name, depth_only=True)
+        raise SystemExit(0)
+
+    console.rule("Starting the depth processing...")
+    depth_path = base_path + f"/{scene_name}/1/depths"
+    gt_path1 = os.path.join(depth_path, f"frame{frame_start}.jpg.geometric.png")
+    gt_path2 = os.path.join(depth_path, f"frame{frame_end}.jpg.geometric.png")
+
+    if not (os.path.exists(gt_path1) and os.path.exists(gt_path2)):
+        console.print(f"[red]GT missing for {scene_name} {frame_start}-{frame_end}, switching to depth-only[/red]")
+        visualize_results_separate(depth1, depth2, None, None, frame_start, frame_end, output_dir, scene_name, depth_only=True)
+        raise SystemExit(0)
+
+    console.rule("[bold red] Left View")
+    ground_truth1 = load_and_preprocess_mask(gt_path1, original_size1, target_size=512, square_ok=True).astype(np.float32) / 255.0
     refined_depth1 = process_and_evaluate_depth(depth1, ground_truth1, mask1, frame_start, output_dir)
 
-    # 处理第二张图片
-    gt_path2 = os.path.join(depth_path, f"frame{frame_end}.jpg.geometric.png")
     console.rule("[bold red] Right View")
-    ground_truth2 = load_ground_truth(gt_path2)
-    ground_truth2 = load_and_preprocess_mask(gt_path2, original_size2, target_size=512, square_ok=True)
-    ground_truth2 = ground_truth2.astype(np.float32) / 255.0
-    depth2, mask2 = compute_depth(scene, mask2, frame_end, output_dir, 1)
+    ground_truth2 = load_and_preprocess_mask(gt_path2, original_size2, target_size=512, square_ok=True).astype(np.float32) / 255.0
     refined_depth2 = process_and_evaluate_depth(depth2, ground_truth2, mask2, frame_end, output_dir)
 
-    visualize_results_separate(refined_depth1, refined_depth2, ground_truth1, ground_truth2, frame_start, frame_end, output_dir, scene_name)
+    visualize_results_separate(refined_depth1, refined_depth2, ground_truth1, ground_truth2, frame_start, frame_end, output_dir, scene_name, depth_only=False)
 '''
 python -m depth.depth_CUT3R --scene_name hospital_easy_P019 --frame_start 359 --frame_end 369 --output output/depth_hospital
 
@@ -497,4 +661,6 @@ python -m depth.depth_CUT3R --scene_name japanesealley_easy_P003 --frame_start 4
 python -m depth.depth_CUT3R --scene_name japanesealley_easy_P005 --frame_start 150 --frame_end 160 --output output/depth_japanesealley_base
 python -m depth.depth_CUT3R --scene_name outdoor_night_1 --frame_start 1975 --frame_end 1980 --output output/depth_outdoor_night_1 --base_folder /run/determined/workdir/data/feed_forward_event/MVSEC_all
 python -m depth.depth_CUT3R --scene_name hospital_easy_P015 --frame_start 1 --frame_end 2 --output output/depth_hospital_P015 --base_folder output_blur
+
+python -m depth.depth_CUT3R --scene_name sequence_031 --frame_start 330 --frame_end 335 --output output/depth_peod --base_folder /run/user/1000/gvfs/sftp:host=10.0.1.67,port=22332,user=sht/UNSAFE_SSD4/PEOD/out_evggs_33ms --depth_only 
 '''
